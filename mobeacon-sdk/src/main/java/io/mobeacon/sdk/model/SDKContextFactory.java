@@ -9,6 +9,7 @@ import android.os.Build;
 import android.provider.Settings;
 import android.telephony.TelephonyManager;
 import android.util.DisplayMetrics;
+import android.util.Log;
 
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -40,12 +41,20 @@ public class SDKContextFactory {
         sdkContext.setOS("Android");
         sdkContext.setOSVersion(Build.VERSION.RELEASE);
         sdkContext.setLang(getLang());
-        sdkContext.setLang(getCountry());
+        sdkContext.setCountry(getCountry());
 
         sdkContext.setProvider(getProvider(ctx));
 
         sdkContext.setDeviceManufacturer(Build.MANUFACTURER);
         sdkContext.setDeviceModel(Build.MODEL);
+        Log.i("SdkContext", "Build.ID = " + Build.ID);
+        Log.i("SdkContext", "Build.DEVICE = "+Build.DEVICE);
+        Log.i("SdkContext", "Build.DISPLAY = "+Build.DISPLAY);
+        Log.i("SdkContext", "Build.HARDWARE = "+Build.HARDWARE);
+        Log.i("SdkContext", "Build.BRAND = "+Build.BRAND);
+
+        sdkContext.setDeviceHardwareVersion("unknown");
+
         sdkContext.setDeviceHardwareId(Build.SERIAL);
         sdkContext.setDevicePlatformId(getAndroidId(ctx));
         sdkContext.setDeviceType(getDeviceType(ctx));
