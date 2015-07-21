@@ -7,8 +7,6 @@ import android.view.Menu;
 import android.view.MenuItem;
 
 import io.mobeacon.sdk.MobeaconSDK;
-import io.mobeacon.sdk.services.BeaconDiscoveryService;
-
 
 public class MainActivity extends AppCompatActivity {
     private static final String MOBEACON_APP_KEY = "550e8400-e29b-41d4-a716-446655440000";
@@ -17,10 +15,8 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(io.mobeacon.demo.R.layout.activity_main);
 
-        MobeaconSDK sdk = MobeaconSDK.getInstance(this.getBaseContext(), MOBEACON_APP_KEY, "DEBUG");
-
-        Intent intent = new Intent(this, BeaconDiscoveryService.class);
-        startService(intent);
+        //INIT Mobeacon SDK
+        MobeaconSDK.getInstance(this.getBaseContext(), MOBEACON_APP_KEY, "DEBUG");
     }
 
     @Override

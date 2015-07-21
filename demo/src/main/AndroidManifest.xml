@@ -42,7 +42,7 @@
             </intent-filter>
         </activity>
 
-        <service android:name="io.mobeacon.sdk.services.BeaconDiscoveryService"/>
+        <service android:name="io.mobeacon.sdk.services.MobeaconService" android:exported="false"/>
 
     </application>
 
