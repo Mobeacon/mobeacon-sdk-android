@@ -11,7 +11,7 @@ import retrofit.converter.GsonConverter;
  */
 public class RestClient {
     private static final String BASE_URL = "http://10.0.2.2:8080";
-    private SDKInitializationService sdkInitializationService;
+    private MobeaconRestAPI mobeaconRestAPI;
 
     public RestClient()
     {
@@ -25,11 +25,12 @@ public class RestClient {
                 .setConverter(new GsonConverter(gson))
                 .build();
 
-        sdkInitializationService = restAdapter.create(SDKInitializationService.class);
+        mobeaconRestAPI = restAdapter.create(MobeaconRestAPI.class);
+
     }
 
-    public SDKInitializationService getSDKInitializationService()
+    public MobeaconRestAPI getMobeaconRestAPI()
     {
-        return sdkInitializationService;
+        return mobeaconRestAPI;
     }
 }
