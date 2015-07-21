@@ -8,6 +8,7 @@ import io.mobeacon.sdk.model.SDKConf;
 import io.mobeacon.sdk.model.SDKContext;
 import io.mobeacon.sdk.model.SDKContextFactory;
 import io.mobeacon.sdk.rest.RestClient;
+import io.mobeacon.sdk.services.MobeaconService;
 import io.mobeacon.sdk.util.DateTimeUtils;
 
 /**
@@ -31,9 +32,6 @@ public class MobeaconSDK {
         if (instance == null)
         {
             instance = new MobeaconSDK(ctx, appKey, googleId, logLevel);
-            SDKContext sdkContext = SDKContextFactory.create(ctx, appKey);
-            SDKConf sdkConfig = new RestClient().getSDKInitializationService().init(appKey, sdkContext);
-            Log.i(TAG, String.format("SDK initialization completed. Config: isEnabled=%s", sdkConfig.isEnabled()));
         }
         return instance;
     }
@@ -46,6 +44,7 @@ public class MobeaconSDK {
         this.appKey = appKey;
         this.googleId = googleId;
         this.logLevel = logLevel;
+        MobeaconService.startActionInit(ctx, appKey, googleId);
     }
 
     public String getAppKey() {
