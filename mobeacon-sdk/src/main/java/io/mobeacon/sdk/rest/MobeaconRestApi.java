@@ -15,7 +15,7 @@ import rx.Observable;
 /**
  * Created by maxulan on 19.07.15.
  */
-public interface MobeaconRestAPI {
+public interface MobeaconRestApi {
     @POST("/app/{appKey}/init")
     Observable<SDKConf> init(@Path("appKey") String appKey, @Body SDKContext ctx);
 
