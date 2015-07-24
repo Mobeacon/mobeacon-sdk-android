@@ -1,15 +1,8 @@
 package io.mobeacon.sdk;
 
 import android.content.Context;
-import android.content.SharedPreferences;
-import android.util.Log;
 
-import io.mobeacon.sdk.model.SDKConf;
-import io.mobeacon.sdk.model.SDKContext;
-import io.mobeacon.sdk.model.SDKContextFactory;
-import io.mobeacon.sdk.rest.RestClient;
 import io.mobeacon.sdk.services.MobeaconService;
-import io.mobeacon.sdk.util.DateTimeUtils;
 
 /**
  * Created by maxulan on 15.07.15.

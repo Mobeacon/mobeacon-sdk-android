@@ -29,22 +29,6 @@ public class BeaconDiscoveryService extends IntentService implements BeaconConsu
 
     }
 
-    @Override
-    public void onCreate() {
-        super.onCreate();
-        //TODO init BLE scanner here
-    }
-
-    @Override
-    public int onStartCommand(Intent intent, int flags, int startId) {
-        return super.onStartCommand(intent, flags, startId);
-    }
-
-    @Override
-    public IBinder onBind(Intent intent) {
-        // TODO: Return the communication channel to the service.
-        throw new UnsupportedOperationException("Not yet implemented");
-    }
 
     @Override
     public void onBeaconServiceConnect() {

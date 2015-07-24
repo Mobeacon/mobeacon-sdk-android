@@ -20,5 +20,5 @@ public interface MobeaconRestApi {
     Observable<SDKConf> init(@Path("appKey") String appKey, @Body SDKContext ctx);
 
     @GET("/app/{appKey}/geo")
-    Observable<List<Location>> getNearestLocations(@Path("appKey") String appKey, @Query("lat") double latitude, @Query("lon") double longitude, @Query("rad") double radius, @Query("n") int limit);
+    Observable<List<Location>> getNearestLocations(@Path("appKey") String appKey, @Query("lat") double latitude, @Query("lon") double longitude, @Query("rad") int radius, @Query("n") int limit);
 }

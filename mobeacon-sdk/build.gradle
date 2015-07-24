@@ -25,6 +25,7 @@ dependencies {
     compile 'org.altbeacon:android-beacon-library:2.3.4'
     compile 'com.google.android.gms:play-services:7.5.0'
     compile 'com.squareup.retrofit:retrofit:1.9.0'
-    compile 'io.reactivex:rxjava:1.0.10'
+    compile 'io.reactivex:rxjava:1.0.12'
+    compile 'io.reactivex:rxandroid:0.25.0'
 }
 
