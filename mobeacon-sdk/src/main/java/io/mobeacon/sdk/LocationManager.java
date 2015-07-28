@@ -9,6 +9,7 @@ import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.api.GoogleApiClient;
 import com.google.android.gms.common.api.GoogleApiClient.ConnectionCallbacks;
 import com.google.android.gms.common.api.GoogleApiClient.OnConnectionFailedListener;
+import com.google.android.gms.location.GeofencingRequest;
 import com.google.android.gms.location.LocationListener;
 import com.google.android.gms.location.LocationRequest;
 import com.google.android.gms.location.LocationServices;
@@ -30,12 +31,15 @@ public class LocationManager implements ConnectionCallbacks, OnConnectionFailedL
     private GoogleApiClient mGoogleApiClient;
     private LocationRequest mLocationRequest;
     private MobeaconRestApi mobeaconRestApi;
+    private GeofencingManager mGeofencingManager;
     private String appKey;
 
     public LocationManager(String appKey, MobeaconRestApi mobeaconRestApi) {
         this.mobeaconRestApi = mobeaconRestApi;
         this.appKey = appKey;
+
         buildGoogleApiClient();
+        this.mGeofencingManager = new GeofencingManager(mGoogleApiClient);
         createLocationRequest();
         mGoogleApiClient.connect();
     }
@@ -90,7 +94,10 @@ public class LocationManager implements ConnectionCallbacks, OnConnectionFailedL
             mobeaconRestApi.getNearestLocations(appKey, loc.getLatitude(), loc.getLongitude(), DEFAULT_RADIUS, DEFAULT_LIMIT).subscribe(new Action1<List<io.mobeacon.sdk.model.Location>>() {
                 @Override
                 public void call(List<io.mobeacon.sdk.model.Location> locations) {
-                    Log.i(TAG, String.format("Found %d locations nearby", locations.size()));
+                    if (locations != null) {
+                        Log.i(TAG, String.format("Found %d locations nearby", locations.size()));
+                        mGeofencingManager.setLocations(locations);
+                    }
                 }
             }, new Action1<Throwable>() {
                 @Override

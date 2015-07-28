@@ -1,11 +1,23 @@
 package io.mobeacon.sdk.services;
 
 import android.app.IntentService;
+import android.app.Notification;
+import android.app.NotificationManager;
 import android.content.Intent;
 import android.content.Context;
+import android.support.v7.app.NotificationCompat;
+import android.text.TextUtils;
 import android.util.Log;
 
+import com.google.android.gms.location.Geofence;
+import com.google.android.gms.location.GeofencingEvent;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import io.mobeacon.sdk.GeofenceErrorMessages;
 import io.mobeacon.sdk.LocationManager;
+import io.mobeacon.sdk.R;
 import io.mobeacon.sdk.model.SDKConf;
 import io.mobeacon.sdk.model.SDKContext;
 import io.mobeacon.sdk.model.SDKContextFactory;
@@ -25,11 +37,9 @@ public class MobeaconService extends IntentService {
 
     private static final String TAG = "MobeaconService";
 
-
-
     // IntentService can perform, e.g. ACTION_INIT
-    private static final String ACTION_INIT = "io.mobeacon.sdk.services.action.INIT";
-    private static final String ACTION_BAZ = "io.mobeacon.sdk.services.action.BAZ";
+    public static final String ACTION_INIT = "io.mobeacon.sdk.services.action.INIT";
+    public static final String ACTION_GEOFENCE = "io.mobeacon.sdk.services.action.GEOFENCE";
 
     private static final String EXTRA_APP_KEY = "io.mobeacon.sdk.services.extra.APP_KEY";
     private static final String EXTRA_GOOGLE_ID = "io.mobeacon.sdk.services.extra.GOOGLE_ID";
@@ -59,7 +69,7 @@ public class MobeaconService extends IntentService {
     // TODO: Customize helper method
     public static void startActionBaz(Context context, String param1, String param2) {
         Intent intent = new Intent(context, MobeaconService.class);
-        intent.setAction(ACTION_BAZ);
+        intent.setAction(ACTION_GEOFENCE);
         intent.putExtra(EXTRA_APP_KEY, param1);
         intent.putExtra(EXTRA_GOOGLE_ID, param2);
         context.startService(intent);
@@ -73,14 +83,15 @@ public class MobeaconService extends IntentService {
     protected void onHandleIntent(Intent intent) {
         if (intent != null) {
             final String action = intent.getAction();
+            Log.i(TAG, String.format("Handle intent action %s ", action));
+
             if (ACTION_INIT.equals(action)) {
                 final String appKey = intent.getStringExtra(EXTRA_APP_KEY);
                 final String googleId = intent.getStringExtra(EXTRA_GOOGLE_ID);
                 handleActionInit(appKey, googleId);
-            } else if (ACTION_BAZ.equals(action)) {
-                final String param1 = intent.getStringExtra(EXTRA_APP_KEY);
-                final String param2 = intent.getStringExtra(EXTRA_GOOGLE_ID);
-                handleActionBaz(param1, param2);
+            } else if (ACTION_GEOFENCE.equals(action)) {
+                GeofencingEvent geofencingEvent = GeofencingEvent.fromIntent(intent);
+                handleActionGeofenceDiscovery(geofencingEvent);
             }
         }
     }
@@ -121,9 +132,40 @@ public class MobeaconService extends IntentService {
      * Handle action Baz in the provided background thread with the provided
      * parameters.
      */
-    private void handleActionBaz(String param1, String param2) {
-        // TODO: Handle action Baz
-        throw new UnsupportedOperationException("Not yet implemented");
+    private void handleActionGeofenceDiscovery(GeofencingEvent geofencingEvent) {
+
+        if (geofencingEvent.hasError()) {
+            String errorMessage = GeofenceErrorMessages.getErrorString(this,
+                    geofencingEvent.getErrorCode());
+            Log.e(TAG, errorMessage);
+            return;
+        }
+
+        // Get the transition type.
+        int geofenceTransition = geofencingEvent.getGeofenceTransition();
+
+        // Test that the reported transition was of interest.
+        if (geofenceTransition == Geofence.GEOFENCE_TRANSITION_ENTER ||
+                geofenceTransition == Geofence.GEOFENCE_TRANSITION_EXIT) {
+
+            // Get the geofences that were triggered. A single event can trigger
+            // multiple geofences.
+            List triggeringGeofences = geofencingEvent.getTriggeringGeofences();
+
+            // Get the transition details as a String.
+            String geofenceTransitionDetails = getGeofenceTransitionDetails(
+                    this,
+                    geofenceTransition,
+                    triggeringGeofences
+            );
+
+            // Send notification and log the transition details.
+            sendNotification(geofenceTransitionDetails);
+            Log.i(TAG, geofenceTransitionDetails);
+        } else {
+            // Log the error.
+            Log.e(TAG, "geofence_transition_invalid_type: " + geofenceTransition);
+        }
     }
 
     @Override
@@ -136,5 +178,58 @@ public class MobeaconService extends IntentService {
         super.onCreate();
         APP_CONTEXT = getApplicationContext();
         mobeaconRestApi = MobeaconRestApiFactory.create();
+    }
+
+    /**
+     * Gets transition details and returns them as a formatted string.
+     *
+     * @param context               The app context.
+     * @param geofenceTransition    The ID of the geofence transition.
+     * @param triggeringGeofences   The geofence(s) triggered.
+     * @return                      The transition details formatted as String.
+     */
+    private String getGeofenceTransitionDetails(
+            Context context,
+            int geofenceTransition,
+            List<Geofence> triggeringGeofences) {
+
+        String geofenceTransitionString = getTransitionString(geofenceTransition);
+
+        // Get the Ids of each geofence that was triggered.
+        ArrayList triggeringGeofencesIdsList = new ArrayList();
+        for (Geofence geofence : triggeringGeofences) {
+            triggeringGeofencesIdsList.add(geofence.getRequestId());
+        }
+        String triggeringGeofencesIdsString = TextUtils.join(", ", triggeringGeofencesIdsList);
+
+        return geofenceTransitionString + ": " + triggeringGeofencesIdsString;
+    }
+
+    /**
+     * Maps geofence transition types to their human-readable equivalents.
+     *
+     * @param transitionType    A transition type constant defined in Geofence
+     * @return                  A String indicating the type of transition
+     */
+    private String getTransitionString(int transitionType) {
+        switch (transitionType) {
+            case Geofence.GEOFENCE_TRANSITION_ENTER:
+                return "geofence transition entered";
+            case Geofence.GEOFENCE_TRANSITION_EXIT:
+                return "geofence transition exited";
+            default:
+                return "unknown geofence transition";
+        }
+    }
+
+    private void sendNotification(String geofenceTransitionDetails){
+        Notification notification = new NotificationCompat.Builder(MobeaconService.APP_CONTEXT).
+                setSmallIcon(R.drawable.notification_template_icon_bg).
+                setContentTitle("Test geofence notification").
+                setContentText(geofenceTransitionDetails).
+                build();
+        NotificationManager mNotificationManager =
+                (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        mNotificationManager.notify(0, notification);
     }
 }
