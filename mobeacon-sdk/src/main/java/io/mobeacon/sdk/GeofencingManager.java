@@ -19,7 +19,7 @@ import io.mobeacon.sdk.services.MobeaconService;
  * Created by maxulan on 27.07.15.
  */
 public class GeofencingManager {
-    private static final String TAG = "GeofencingManager";
+    private static final String TAG = "MobeaconGeofencingMgr";
     private List<Geofence> mGeofenceList;
     private GoogleApiClient mGoogleApiClient;
     private PendingIntent mGeofencePendingIntent;

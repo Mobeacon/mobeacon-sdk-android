@@ -5,6 +5,7 @@ import android.app.Notification;
 import android.app.NotificationManager;
 import android.content.Intent;
 import android.content.Context;
+import android.os.RemoteException;
 import android.support.v7.app.NotificationCompat;
 import android.text.TextUtils;
 import android.util.Log;
@@ -12,17 +13,23 @@ import android.util.Log;
 import com.google.android.gms.location.Geofence;
 import com.google.android.gms.location.GeofencingEvent;
 
+import org.altbeacon.beacon.BeaconConsumer;
+import org.altbeacon.beacon.BeaconManager;
+import org.altbeacon.beacon.MonitorNotifier;
+import org.altbeacon.beacon.Region;
+
 import java.util.ArrayList;
 import java.util.List;
 
 import io.mobeacon.sdk.GeofenceErrorMessages;
-import io.mobeacon.sdk.LocationManager;
+import io.mobeacon.sdk.LocationMonitor;
 import io.mobeacon.sdk.R;
 import io.mobeacon.sdk.model.SDKConf;
 import io.mobeacon.sdk.model.SDKContext;
 import io.mobeacon.sdk.model.SDKContextFactory;
 import io.mobeacon.sdk.rest.MobeaconRestApi;
 import io.mobeacon.sdk.rest.MobeaconRestApiFactory;
+import io.mobeacon.sdk.util.LocationUtils;
 import rx.functions.Action1;
 
 /**
@@ -32,7 +39,7 @@ import rx.functions.Action1;
  * TODO: Customize class - update intent actions, extra parameters and static
  * helper methods.
  */
-public class MobeaconService extends IntentService {
+public class MobeaconService extends IntentService implements BeaconConsumer {
     public static Context APP_CONTEXT;
 
     private static final String TAG = "MobeaconService";
@@ -45,6 +52,7 @@ public class MobeaconService extends IntentService {
     private static final String EXTRA_GOOGLE_ID = "io.mobeacon.sdk.services.extra.GOOGLE_ID";
 
     private MobeaconRestApi mobeaconRestApi;
+    private BeaconManager beaconManager;
 
     /**
      * Starts this service to perform action Foo with the given parameters. If
@@ -122,7 +130,9 @@ public class MobeaconService extends IntentService {
     protected synchronized void completeSdkInit(String appKey, String googleProjectId, SDKConf sdkConf) {
         Log.i(TAG, String.format("SDK initialization completed. Config: isEnabled=%s. Thread id %s ", sdkConf.isEnabled(), Thread.currentThread().getId()));
         if (sdkConf.isEnabled()) {
-            LocationManager locationManager = new LocationManager(appKey, mobeaconRestApi);
+            LocationMonitor locationManager = new LocationMonitor(appKey, mobeaconRestApi);
+            beaconManager = BeaconManager.getInstanceForApplication(this);
+            beaconManager.bind(this);
         }
         else {
             Log.i(TAG, "SDK disabled according to configuration.");
@@ -132,7 +142,8 @@ public class MobeaconService extends IntentService {
      * Handle action Baz in the provided background thread with the provided
      * parameters.
      */
-    private void handleActionGeofenceDiscovery(GeofencingEvent geofencingEvent) {
+    private void
+    handleActionGeofenceDiscovery(GeofencingEvent geofencingEvent) {
 
         if (geofencingEvent.hasError()) {
             String errorMessage = GeofenceErrorMessages.getErrorString(this,
@@ -171,6 +182,9 @@ public class MobeaconService extends IntentService {
     @Override
     public void onDestroy() {
         super.onDestroy();
+        if (beaconManager != null) {
+            beaconManager.unbind(this);
+        }
     }
 
     @Override
@@ -178,6 +192,9 @@ public class MobeaconService extends IntentService {
         super.onCreate();
         APP_CONTEXT = getApplicationContext();
         mobeaconRestApi = MobeaconRestApiFactory.create();
+        Log.i(TAG, "Network location is "+ (LocationUtils.isNetLocEnabled(this) ? "enabled": "disabled"));
+        Log.i(TAG, "WiFi is "+ (LocationUtils.isWiFiEnabled(this) ? "enabled": "disabled"));
+        Log.i(TAG, "AirplaneMode is " + (LocationUtils.isAirplaneModeEnabled(this) ? "enabled" : "disabled"));
     }
 
     /**
@@ -232,4 +249,32 @@ public class MobeaconService extends IntentService {
                 (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
         mNotificationManager.notify(0, notification);
     }
+    @Override
+    public void onBeaconServiceConnect() {
+        Log.i(TAG, "Beacon service connected");
+        beaconManager.setMonitorNotifier(new MonitorNotifier() {
+            @Override
+            public void didEnterRegion(Region region) {
+                region.getUniqueId();
+                Log.i(TAG, "I just saw an beacon for the first time!");
+            }
+
+            @Override
+            public void didExitRegion(Region region) {
+                Log.i(TAG, "I no longer see an beacon");
+            }
+
+            @Override
+            public void didDetermineStateForRegion(int state, Region region) {
+                Log.i(TAG, "I have just switched from seeing/not seeing beacons: " + state);
+            }
+        });
+
+        try {
+            beaconManager.startMonitoringBeaconsInRegion(new Region("myMonitoringUniqueId", null, null, null));
+            Log.i(TAG, "Beacons monitoring is started");
+
+        } catch (RemoteException e) {    }
+    }
+
 }

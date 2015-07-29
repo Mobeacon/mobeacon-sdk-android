@@ -23,8 +23,8 @@ import rx.functions.Action1;
 /**
  * Created by maxulan on 22.07.15.
  */
-public class LocationManager implements ConnectionCallbacks, OnConnectionFailedListener, LocationListener {
-    private static final String TAG = "MobeaconLocationManager";
+public class LocationMonitor implements ConnectionCallbacks, OnConnectionFailedListener, LocationListener {
+    private static final String TAG = "MobeaconLocationMgr";
     private static final int DEFAULT_RADIUS = 5000;
     private static final int DEFAULT_LIMIT = 10;
 
@@ -34,7 +34,7 @@ public class LocationManager implements ConnectionCallbacks, OnConnectionFailedL
     private GeofencingManager mGeofencingManager;
     private String appKey;
 
-    public LocationManager(String appKey, MobeaconRestApi mobeaconRestApi) {
+    public LocationMonitor(String appKey, MobeaconRestApi mobeaconRestApi) {
         this.mobeaconRestApi = mobeaconRestApi;
         this.appKey = appKey;
 
@@ -88,6 +88,16 @@ public class LocationManager implements ConnectionCallbacks, OnConnectionFailedL
         LocationServices.FusedLocationApi.requestLocationUpdates(
                 mGoogleApiClient, mLocationRequest, this);
     }
+
+    /**
+     * Requests location updates from the FusedLocationApi.
+     */
+    private void stopLocationUpdates() {
+        // The final argument to {@code requestLocationUpdates()} is a LocationListener
+        // (http://developer.android.com/reference/com/google/android/gms/location/LocationListener.html).
+        LocationServices.FusedLocationApi.removeLocationUpdates(mGoogleApiClient, this);
+    }
+
     public void onLocationChanged(Location loc) {
         if (loc != null) {
             Log.i(TAG, String.format("location update: Latitude=%f Longitude=%f", loc.getLatitude(), loc.getLongitude()));
@@ -97,6 +107,8 @@ public class LocationManager implements ConnectionCallbacks, OnConnectionFailedL
                     if (locations != null) {
                         Log.i(TAG, String.format("Found %d locations nearby", locations.size()));
                         mGeofencingManager.setLocations(locations);
+                        //from here we use Geofence instad of GPS to save energy
+                        stopLocationUpdates();
                     }
                 }
             }, new Action1<Throwable>() {
