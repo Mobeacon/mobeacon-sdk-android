@@ -9,6 +9,7 @@ public class Beacon {
     private int major;
     private int minor;
     private String proximity;
+    private Notification notification;
 
     public Beacon(long id, String uuid, int major, int minor, String proximity) {
         this.id = id;
@@ -57,4 +58,13 @@ public class Beacon {
     public void setProximity(String proximity) {
         this.proximity = proximity;
     }
+
+    public Notification getNotification() {
+        return notification;
+    }
+
+    public void setNotification(Notification notification) {
+        this.notification = notification;
+    }
+
 }

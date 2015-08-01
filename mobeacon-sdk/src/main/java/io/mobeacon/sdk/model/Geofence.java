@@ -6,6 +6,7 @@ package io.mobeacon.sdk.model;
 public class Geofence {
 
     private int radius;
+    private Notification notification;
 
     public Geofence(int radius) {
         this.radius = radius;
@@ -17,5 +18,13 @@ public class Geofence {
 
     public void setRadius(int radius) {
         this.radius = radius;
+    }
+
+    public Notification getNotification() {
+        return notification;
+    }
+
+    public void setNotification(Notification notification) {
+        this.notification = notification;
     }
 }

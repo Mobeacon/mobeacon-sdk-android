@@ -15,6 +15,7 @@ import com.google.android.gms.location.GeofencingEvent;
 
 import org.altbeacon.beacon.BeaconConsumer;
 import org.altbeacon.beacon.BeaconManager;
+import org.altbeacon.beacon.BeaconParser;
 import org.altbeacon.beacon.MonitorNotifier;
 import org.altbeacon.beacon.Region;
 
@@ -132,6 +133,8 @@ public class MobeaconService extends IntentService implements BeaconConsumer {
         if (sdkConf.isEnabled()) {
             LocationMonitor locationManager = new LocationMonitor(appKey, mobeaconRestApi);
             beaconManager = BeaconManager.getInstanceForApplication(this);
+            //set layput for estimote/aprilBrothers
+            beaconManager.getBeaconParsers().add(new BeaconParser().setBeaconLayout("m:2-3=0215,i:4-19,i:20-21,i:22-23,p:24-24"));
             beaconManager.bind(this);
         }
         else {
@@ -142,8 +145,7 @@ public class MobeaconService extends IntentService implements BeaconConsumer {
      * Handle action Baz in the provided background thread with the provided
      * parameters.
      */
-    private void
-    handleActionGeofenceDiscovery(GeofencingEvent geofencingEvent) {
+    private void handleActionGeofenceDiscovery(GeofencingEvent geofencingEvent) {
 
         if (geofencingEvent.hasError()) {
             String errorMessage = GeofenceErrorMessages.getErrorString(this,
@@ -239,11 +241,11 @@ public class MobeaconService extends IntentService implements BeaconConsumer {
         }
     }
 
-    private void sendNotification(String geofenceTransitionDetails){
+    private void sendNotification(String text){
         Notification notification = new NotificationCompat.Builder(MobeaconService.APP_CONTEXT).
                 setSmallIcon(R.drawable.notification_template_icon_bg).
                 setContentTitle("Test geofence notification").
-                setContentText(geofenceTransitionDetails).
+                setContentText(text).
                 build();
         NotificationManager mNotificationManager =
                 (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
