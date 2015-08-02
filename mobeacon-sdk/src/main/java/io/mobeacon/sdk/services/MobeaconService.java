@@ -1,30 +1,18 @@
 package io.mobeacon.sdk.services;
 
 import android.app.IntentService;
-import android.app.Notification;
 import android.app.NotificationManager;
 import android.content.Intent;
 import android.content.Context;
-import android.os.RemoteException;
-import android.support.v7.app.NotificationCompat;
-import android.text.TextUtils;
 import android.util.Log;
 
-import com.google.android.gms.location.Geofence;
 import com.google.android.gms.location.GeofencingEvent;
 
-import org.altbeacon.beacon.BeaconConsumer;
 import org.altbeacon.beacon.BeaconManager;
 import org.altbeacon.beacon.BeaconParser;
-import org.altbeacon.beacon.MonitorNotifier;
-import org.altbeacon.beacon.Region;
 
-import java.util.ArrayList;
-import java.util.List;
-
-import io.mobeacon.sdk.GeofenceErrorMessages;
 import io.mobeacon.sdk.LocationMonitor;
-import io.mobeacon.sdk.R;
+import io.mobeacon.sdk.NotificationSender;
 import io.mobeacon.sdk.model.SDKConf;
 import io.mobeacon.sdk.model.SDKContext;
 import io.mobeacon.sdk.model.SDKContextFactory;
@@ -40,14 +28,17 @@ import rx.functions.Action1;
  * TODO: Customize class - update intent actions, extra parameters and static
  * helper methods.
  */
-public class MobeaconService extends IntentService implements BeaconConsumer {
+public class MobeaconService extends IntentService{//} implements BeaconConsumer {
     public static Context APP_CONTEXT;
 
     private static final String TAG = "MobeaconService";
 
     // IntentService can perform, e.g. ACTION_INIT
     public static final String ACTION_INIT = "io.mobeacon.sdk.services.action.INIT";
+    public static final String ACTION_CONFIG_SDK = "io.mobeacon.sdk.services.action.CONFIG_SDK";
     public static final String ACTION_GEOFENCE = "io.mobeacon.sdk.services.action.GEOFENCE";
+
+    private static final String EXTRA_SDK_CONFIG = "io.mobeacon.sdk.services.extra.SDK_CONFIG";
 
     private static final String EXTRA_APP_KEY = "io.mobeacon.sdk.services.extra.APP_KEY";
     private static final String EXTRA_GOOGLE_ID = "io.mobeacon.sdk.services.extra.GOOGLE_ID";
@@ -76,11 +67,11 @@ public class MobeaconService extends IntentService implements BeaconConsumer {
      * @see IntentService
      */
     // TODO: Customize helper method
-    public static void startActionBaz(Context context, String param1, String param2) {
+    public static void startActionConfig(Context context, String appKey, SDKConf conf) {
         Intent intent = new Intent(context, MobeaconService.class);
-        intent.setAction(ACTION_GEOFENCE);
-        intent.putExtra(EXTRA_APP_KEY, param1);
-        intent.putExtra(EXTRA_GOOGLE_ID, param2);
+        intent.setAction(ACTION_CONFIG_SDK);
+        intent.putExtra(EXTRA_APP_KEY, appKey);
+        intent.putExtra(EXTRA_SDK_CONFIG, conf);
         context.startService(intent);
     }
 
@@ -98,9 +89,22 @@ public class MobeaconService extends IntentService implements BeaconConsumer {
                 final String appKey = intent.getStringExtra(EXTRA_APP_KEY);
                 final String googleId = intent.getStringExtra(EXTRA_GOOGLE_ID);
                 handleActionInit(appKey, googleId);
-            } else if (ACTION_GEOFENCE.equals(action)) {
-                GeofencingEvent geofencingEvent = GeofencingEvent.fromIntent(intent);
-                handleActionGeofenceDiscovery(geofencingEvent);
+            }
+            else if(ACTION_CONFIG_SDK.equals(action)) {
+                final String appKey = intent.getStringExtra(EXTRA_APP_KEY);
+                final SDKConf conf = intent.getParcelableExtra(EXTRA_SDK_CONFIG);
+                configureSDK(appKey, conf);
+            }
+            else if (ACTION_GEOFENCE.equals(action)) {
+                Log.i(TAG, String.format("Handle geofence intent action %s ", action));
+
+                if(LocationMonitor.instance().getGeofencingManager() != null) {
+                    GeofencingEvent geofencingEvent = GeofencingEvent.fromIntent(intent);
+                    LocationMonitor.instance().getGeofencingManager().processGeofencingEvent(geofencingEvent);
+                }
+                else {
+                    Log.e(TAG, String.format("Failed to handle geofence intent:  LocationMonitor.instance().getGeofencingManager()=%s", LocationMonitor.instance().getGeofencingManager()));
+                }
             }
         }
     }
@@ -112,13 +116,12 @@ public class MobeaconService extends IntentService implements BeaconConsumer {
     private void handleActionInit(final String appKey, final String googleProjectId) {
         Log.i(TAG, String.format("Handle init action. Thread id %s ", Thread.currentThread().getId()));
 
-        SDKContext sdkContext = SDKContextFactory.create(MobeaconService.this, appKey);
-
+        SDKContext sdkContext = SDKContextFactory.create(MobeaconService.APP_CONTEXT, appKey);
 
         mobeaconRestApi.init(appKey, sdkContext).subscribe(new Action1<SDKConf>() {
             @Override
             public void call(SDKConf sdkConf) {
-                completeSdkInit(appKey, googleProjectId, sdkConf);
+                MobeaconService.startActionConfig(MobeaconService.APP_CONTEXT, appKey, sdkConf);
             }
         }, new Action1<Throwable>() {
             @Override
@@ -128,70 +131,47 @@ public class MobeaconService extends IntentService implements BeaconConsumer {
         });
 
     }
-    protected synchronized void completeSdkInit(String appKey, String googleProjectId, SDKConf sdkConf) {
+    protected synchronized void configureSDK(String appKey, SDKConf sdkConf) {
         Log.i(TAG, String.format("SDK initialization completed. Config: isEnabled=%s. Thread id %s ", sdkConf.isEnabled(), Thread.currentThread().getId()));
         if (sdkConf.isEnabled()) {
-            LocationMonitor locationManager = new LocationMonitor(appKey, mobeaconRestApi);
-            beaconManager = BeaconManager.getInstanceForApplication(this);
-            //set layput for estimote/aprilBrothers
-            beaconManager.getBeaconParsers().add(new BeaconParser().setBeaconLayout("m:2-3=0215,i:4-19,i:20-21,i:22-23,p:24-24"));
-            beaconManager.bind(this);
+            LocationMonitor.init(appKey, mobeaconRestApi);
+
+            if(sdkConf.isGeofenceEnabled()) {
+                LocationMonitor.instance().enableGeofencingNotifications(new NotificationSender((NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE)));
+                Log.i(TAG, "Geofence notifications enabled.");
+            }
+            else {
+                Log.i(TAG, "Geofence disabled according to configuration.");
+            }
+            if (sdkConf.isBeaconsEnabled()) {
+                beaconManager = BeaconManager.getInstanceForApplication(this);
+                //set layput for estimote/aprilBrothers
+                beaconManager.getBeaconParsers().add(new BeaconParser().setBeaconLayout("m:2-3=0215,i:4-19,i:20-21,i:22-23,p:24-24"));
+//                beaconManager.bind(this);
+            }
+            else {
+                Log.i(TAG, "Beacons disabled according to configuration.");
+            }
         }
         else {
             Log.i(TAG, "SDK disabled according to configuration.");
         }
     }
-    /**
-     * Handle action Baz in the provided background thread with the provided
-     * parameters.
-     */
-    private void handleActionGeofenceDiscovery(GeofencingEvent geofencingEvent) {
 
-        if (geofencingEvent.hasError()) {
-            String errorMessage = GeofenceErrorMessages.getErrorString(this,
-                    geofencingEvent.getErrorCode());
-            Log.e(TAG, errorMessage);
-            return;
-        }
-
-        // Get the transition type.
-        int geofenceTransition = geofencingEvent.getGeofenceTransition();
-
-        // Test that the reported transition was of interest.
-        if (geofenceTransition == Geofence.GEOFENCE_TRANSITION_ENTER ||
-                geofenceTransition == Geofence.GEOFENCE_TRANSITION_EXIT) {
-
-            // Get the geofences that were triggered. A single event can trigger
-            // multiple geofences.
-            List triggeringGeofences = geofencingEvent.getTriggeringGeofences();
-
-            // Get the transition details as a String.
-            String geofenceTransitionDetails = getGeofenceTransitionDetails(
-                    this,
-                    geofenceTransition,
-                    triggeringGeofences
-            );
-
-            // Send notification and log the transition details.
-            sendNotification(geofenceTransitionDetails);
-            Log.i(TAG, geofenceTransitionDetails);
-        } else {
-            // Log the error.
-            Log.e(TAG, "geofence_transition_invalid_type: " + geofenceTransition);
-        }
-    }
 
     @Override
     public void onDestroy() {
         super.onDestroy();
+        Log.i(TAG, " === destroying service ===");
         if (beaconManager != null) {
-            beaconManager.unbind(this);
+//            beaconManager.unbind(this);
         }
     }
 
     @Override
     public void onCreate() {
         super.onCreate();
+        Log.i(TAG, " === creating service ===");
         APP_CONTEXT = getApplicationContext();
         mobeaconRestApi = MobeaconRestApiFactory.create();
         Log.i(TAG, "Network location is "+ (LocationUtils.isNetLocEnabled(this) ? "enabled": "disabled"));
@@ -199,84 +179,32 @@ public class MobeaconService extends IntentService implements BeaconConsumer {
         Log.i(TAG, "AirplaneMode is " + (LocationUtils.isAirplaneModeEnabled(this) ? "enabled" : "disabled"));
     }
 
-    /**
-     * Gets transition details and returns them as a formatted string.
-     *
-     * @param context               The app context.
-     * @param geofenceTransition    The ID of the geofence transition.
-     * @param triggeringGeofences   The geofence(s) triggered.
-     * @return                      The transition details formatted as String.
-     */
-    private String getGeofenceTransitionDetails(
-            Context context,
-            int geofenceTransition,
-            List<Geofence> triggeringGeofences) {
-
-        String geofenceTransitionString = getTransitionString(geofenceTransition);
-
-        // Get the Ids of each geofence that was triggered.
-        ArrayList triggeringGeofencesIdsList = new ArrayList();
-        for (Geofence geofence : triggeringGeofences) {
-            triggeringGeofencesIdsList.add(geofence.getRequestId());
-        }
-        String triggeringGeofencesIdsString = TextUtils.join(", ", triggeringGeofencesIdsList);
-
-        return geofenceTransitionString + ": " + triggeringGeofencesIdsString;
-    }
-
-    /**
-     * Maps geofence transition types to their human-readable equivalents.
-     *
-     * @param transitionType    A transition type constant defined in Geofence
-     * @return                  A String indicating the type of transition
-     */
-    private String getTransitionString(int transitionType) {
-        switch (transitionType) {
-            case Geofence.GEOFENCE_TRANSITION_ENTER:
-                return "geofence transition entered";
-            case Geofence.GEOFENCE_TRANSITION_EXIT:
-                return "geofence transition exited";
-            default:
-                return "unknown geofence transition";
-        }
-    }
-
-    private void sendNotification(String text){
-        Notification notification = new NotificationCompat.Builder(MobeaconService.APP_CONTEXT).
-                setSmallIcon(R.drawable.notification_template_icon_bg).
-                setContentTitle("Test geofence notification").
-                setContentText(text).
-                build();
-        NotificationManager mNotificationManager =
-                (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-        mNotificationManager.notify(0, notification);
-    }
-    @Override
-    public void onBeaconServiceConnect() {
-        Log.i(TAG, "Beacon service connected");
-        beaconManager.setMonitorNotifier(new MonitorNotifier() {
-            @Override
-            public void didEnterRegion(Region region) {
-                region.getUniqueId();
-                Log.i(TAG, "I just saw an beacon for the first time!");
-            }
-
-            @Override
-            public void didExitRegion(Region region) {
-                Log.i(TAG, "I no longer see an beacon");
-            }
-
-            @Override
-            public void didDetermineStateForRegion(int state, Region region) {
-                Log.i(TAG, "I have just switched from seeing/not seeing beacons: " + state);
-            }
-        });
-
-        try {
-            beaconManager.startMonitoringBeaconsInRegion(new Region("myMonitoringUniqueId", null, null, null));
-            Log.i(TAG, "Beacons monitoring is started");
-
-        } catch (RemoteException e) {    }
-    }
+//    @Override
+//    public void onBeaconServiceConnect() {
+//        Log.i(TAG, "Beacon service connected");
+//        beaconManager.setMonitorNotifier(new MonitorNotifier() {
+//            @Override
+//            public void didEnterRegion(Region region) {
+//                region.getUniqueId();
+//                Log.i(TAG, "I just saw an beacon for the first time!");
+//            }
+//
+//            @Override
+//            public void didExitRegion(Region region) {
+//                Log.i(TAG, "I no longer see an beacon");
+//            }
+//
+//            @Override
+//            public void didDetermineStateForRegion(int state, Region region) {
+//                Log.i(TAG, "I have just switched from seeing/not seeing beacons: " + state);
+//            }
+//        });
+//
+//        try {
+//            beaconManager.startMonitoringBeaconsInRegion(new Region("myMonitoringUniqueId", null, null, null));
+//            Log.i(TAG, "Beacons monitoring is started");
+//
+//        } catch (RemoteException e) {    }
+//    }
 
 }

@@ -63,16 +63,4 @@ public class Notification {
         this.actionUrl = actionUrl;
     }
 
-    public android.app.Notification toAndroidNotification() {
-        NotificationCompat.Builder builder = new NotificationCompat.Builder(MobeaconService.APP_CONTEXT).
-                setSmallIcon(R.drawable.notification_template_icon_bg).
-                setTicker(title).
-                setContentTitle(title).
-                setContentText(text).
-                setAutoCancel(true);//cancel if notification clicked
-
-        if (vibrate)
-            builder.setVibrate(new long[] {0, 200, 200, 600, 600});//vibrate for 200 milliseconds and then stop for 200 milliseconds. After that, it vibrates for 600 milliseconds and then stops for that long.
-        return builder.build();
-    }
 }

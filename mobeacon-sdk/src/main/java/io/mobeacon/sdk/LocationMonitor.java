@@ -31,17 +31,34 @@ public class LocationMonitor implements ConnectionCallbacks, OnConnectionFailedL
     private GoogleApiClient mGoogleApiClient;
     private LocationRequest mLocationRequest;
     private MobeaconRestApi mobeaconRestApi;
-    private GeofencingManager mGeofencingManager;
+
+   private GeofencingManager mGeofencingManager;
     private String appKey;
 
-    public LocationMonitor(String appKey, MobeaconRestApi mobeaconRestApi) {
-        this.mobeaconRestApi = mobeaconRestApi;
-        this.appKey = appKey;
+    private static LocationMonitor INSTANCE = new LocationMonitor();
 
+    private LocationMonitor() {
         buildGoogleApiClient();
-        this.mGeofencingManager = new GeofencingManager(mGoogleApiClient);
         createLocationRequest();
-        mGoogleApiClient.connect();
+    }
+    public static LocationMonitor instance() {
+        return INSTANCE;
+    }
+    public static LocationMonitor init(String appKey, MobeaconRestApi mobeaconRestApi) {
+        INSTANCE.mobeaconRestApi = mobeaconRestApi;
+        INSTANCE.appKey = appKey;
+        INSTANCE.mGoogleApiClient.connect();
+        return INSTANCE;
+    }
+
+    public synchronized GeofencingManager getGeofencingManager() {
+        return mGeofencingManager;
+    }
+
+    public synchronized void enableGeofencingNotifications(NotificationSender notificationSender) {
+        if (mGeofencingManager == null) {
+            this.mGeofencingManager = new GeofencingManager(mGoogleApiClient, notificationSender);
+        }
     }
 
     protected synchronized void buildGoogleApiClient() {
@@ -106,7 +123,9 @@ public class LocationMonitor implements ConnectionCallbacks, OnConnectionFailedL
                 public void call(List<io.mobeacon.sdk.model.Location> locations) {
                     if (locations != null) {
                         Log.i(TAG, String.format("Found %d locations nearby", locations.size()));
-                        mGeofencingManager.setLocations(locations);
+                        if (mGeofencingManager != null) {
+                            mGeofencingManager.setLocations(locations);
+                        }
                         //from here we use Geofence instad of GPS to save energy
                         stopLocationUpdates();
                     }
