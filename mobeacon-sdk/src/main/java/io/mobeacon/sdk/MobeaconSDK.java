@@ -18,34 +18,25 @@ public class MobeaconSDK {
     private static MobeaconSDK instance;
 
     public static synchronized MobeaconSDK getInstance(Context ctx, String appKey, String logLevel) {
-        return getInstance(ctx, appKey, null, logLevel);
-    }
-
-    public static synchronized MobeaconSDK getInstance(Context ctx, String appKey, String googleId, String logLevel) {
         if (instance == null)
         {
-            instance = new MobeaconSDK(ctx, appKey, googleId, logLevel);
+            instance = new MobeaconSDK(ctx, appKey, logLevel);
         }
         return instance;
     }
 
-    private final String appKey, googleId, logLevel;
+    private final String appKey, logLevel;
     private final Context ctx;
 
-    private MobeaconSDK(Context ctx, String appKey, String googleId, String logLevel) {
+    private MobeaconSDK(Context ctx, String appKey, String logLevel) {
         this.ctx = ctx;
         this.appKey = appKey;
-        this.googleId = googleId;
         this.logLevel = logLevel;
-        MobeaconService.startActionInit(ctx, appKey, googleId);
+        MobeaconService.start(ctx, appKey);
     }
 
     public String getAppKey() {
         return appKey;
-    }
-
-    public String getGoogleId() {
-        return googleId;
     }
 
     public String getLogLevel() {
