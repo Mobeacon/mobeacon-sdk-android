@@ -9,7 +9,7 @@ import android.view.MenuItem;
 import io.mobeacon.sdk.MobeaconSDK;
 
 public class MainActivity extends AppCompatActivity {
-    private static final String MOBEACON_APP_KEY = "550e8400-e29b-41d4-a716-446655440000";
+    public static final String MOBEACON_APP_KEY = "550e8400-e29b-41d4-a716-446655440000";
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -40,4 +40,5 @@ public class MainActivity extends AppCompatActivity {
 
         return super.onOptionsItemSelected(item);
     }
+
 }
