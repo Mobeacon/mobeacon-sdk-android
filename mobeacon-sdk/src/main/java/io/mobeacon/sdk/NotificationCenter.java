@@ -1,19 +1,15 @@
 package io.mobeacon.sdk;
 
-import android.app.Notification;
 import android.app.NotificationManager;
-import android.app.PendingIntent;
 import android.content.Context;
-import android.content.Intent;
-import android.support.v7.app.NotificationCompat;
 import android.text.TextUtils;
 import android.util.Log;
 
-import com.google.android.gms.common.api.GoogleApiClient;
 import com.google.android.gms.location.Geofence;
 import com.google.android.gms.location.GeofencingEvent;
-import com.google.android.gms.location.GeofencingRequest;
-import com.google.android.gms.location.LocationServices;
+
+import org.altbeacon.beacon.BeaconManager;
+import org.altbeacon.beacon.BeaconParser;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -21,90 +17,82 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 
+import io.mobeacon.sdk.geofence.GeofenceErrorMessages;
+import io.mobeacon.sdk.geofence.IGeofenceTransitionListener;
+import io.mobeacon.sdk.model.Beacon;
 import io.mobeacon.sdk.model.Location;
+import io.mobeacon.sdk.model.Notification;
+import io.mobeacon.sdk.model.SDKConf;
+import io.mobeacon.sdk.nearby.INearbyLocationsListener;
 import io.mobeacon.sdk.services.MobeaconService;
 
 /**
- * Created by maxulan on 27.07.15.
+ * Created by maxulan on 04.08.15.
  */
-public class GeofencingManager {
-    private static final String TAG = "MobeaconGeofencingMgr";
-    private List<Geofence> mGeofenceList;
-    private Map<String, io.mobeacon.sdk.model.Notification> mGeofenceNotifications;
-    private GoogleApiClient mGoogleApiClient;
-    private PendingIntent mGeofencePendingIntent;
+public class NotificationCenter implements IGeofenceTransitionListener, INearbyLocationsListener{
+    public static final String TAG = "NotificationCenter";
 
-
+    private Map<String, Notification> mGeofenceNotifications;
+    private Map<String, Notification> mBeaconNotifications;
+    private NotificationSender notificationSender;
+    private SDKConf sdkConf;
     private GeofenceEventProcessor geofenceEventProcessor;
 
-    public GeofencingManager(GoogleApiClient googleApiClient, NotificationSender notificationSender) {
-        mGoogleApiClient = googleApiClient;
-        mGeofenceList = new ArrayList<>();
+    public NotificationCenter(Context ctx, SDKConf config) {
+        notificationSender = new NotificationSender((NotificationManager) ctx.getSystemService(Context.NOTIFICATION_SERVICE));
         mGeofenceNotifications = new HashMap<>();
-        geofenceEventProcessor = new GeofenceEventProcessor(notificationSender);
+        mBeaconNotifications = new HashMap<>();
+        geofenceEventProcessor = new GeofenceEventProcessor();
     }
 
-    public void processGeofencingEvent(GeofencingEvent geofencingEvent) {
-        geofenceEventProcessor.process(geofencingEvent);
+    public boolean isGeofenceNotificationEnabled() {
+        return sdkConf.isGeofenceEnabled();
+    }
+    public boolean isBeaconNotificationEnabled() {
+        return sdkConf.isBeaconsEnabled();
     }
 
-    public void setLocations(List<Location> locations) {
+    @Override
+    public void onGeofenceTransition(GeofencingEvent event) {
+        geofenceEventProcessor.process(event);
+    }
+
+    @Override
+    public void onNearbyLocationsChange(List<Location> locations) {
         Log.i(TAG, String.format("Setting %d new locations to monitor.", locations.size()));
         if (locations != null) {
-            mGeofenceList.clear();
             mGeofenceNotifications.clear();
+            mBeaconNotifications.clear();
 
             for(Location location : locations) {
-                Geofence geofence = location.getGoogleGeofenceRegion();
-                if (geofence != null) {
-                    mGeofenceList.add(geofence);
-                    Log.i(TAG, String.format("Adding geofence to monitor. Request id - %s", geofence.getRequestId()));
-                    if (location.getGeofence().getNotification() != null ) {
-                        mGeofenceNotifications.put(geofence.getRequestId(),location.getGeofence().getNotification());
-                    }
+                addGeofenceNotificationFor(location);
+                addBeaconNotificationsFor(location);
+            }
+            Log.i(TAG, String.format("Added %d geofence notifications into new motoring list.", mGeofenceNotifications.size()));
+
+        }
+    }
+    private void addGeofenceNotificationFor(Location location) {
+        if (location.getGeofence() != null) {
+            if (location.getGeofence().getNotification() != null ) {
+                Log.i(TAG, String.format("Adding geofence notification. Request id - %s", location.getGeofenceRequestId()));
+                mGeofenceNotifications.put(location.getGeofenceRequestId(), location.getGeofence().getNotification());
+            }
+        }
+    }
+    private void addBeaconNotificationsFor(Location location) {
+        if (location.getBeacons() != null) {
+            for (Beacon beacon : location.getBeacons()) {
+                if (beacon.getNotification() !=null) {
+                    mBeaconNotifications.put(String.valueOf(beacon.getId()), beacon.getNotification());
                 }
             }
-            Log.i(TAG, String.format("Added %d geofences into new motoring list.", mGeofenceList.size()));
-
-            resetGeofencing();
         }
-
-    }
-    private GeofencingRequest getGeofencingRequest() {
-        GeofencingRequest.Builder builder = new GeofencingRequest.Builder();
-        builder.setInitialTrigger(GeofencingRequest.INITIAL_TRIGGER_ENTER);
-        Log.i(TAG, String.format("Building geofence request with %d geofences.", mGeofenceList.size()));
-        builder.addGeofences(mGeofenceList);
-        return builder.build();
-    }
-
-    private PendingIntent getGeofencePendingIntent() {
-        // Reuse the PendingIntent if we already have it.
-        if (mGeofencePendingIntent != null) {
-            return mGeofencePendingIntent;
-        }
-        Intent intent = new Intent(MobeaconService.APP_CONTEXT, MobeaconService.class);
-        intent.setAction(MobeaconService.ACTION_GEOFENCE);
-        // We use FLAG_UPDATE_CURRENT so that we get the same pending intent back when
-        // calling addGeofences() and removeGeofences().
-        mGeofencePendingIntent = PendingIntent.getService(MobeaconService.APP_CONTEXT, 0, intent, PendingIntent.
-                FLAG_UPDATE_CURRENT);
-        return mGeofencePendingIntent;
-    }
-
-    private void resetGeofencing() {
-        Log.i(TAG, "reseting geofencing");
-        if (mGeofenceList != null && mGeofenceList.size() > 0) {
-            LocationServices.GeofencingApi.removeGeofences(mGoogleApiClient, getGeofencePendingIntent());
-        }
-        LocationServices.GeofencingApi.addGeofences(mGoogleApiClient, getGeofencingRequest(), getGeofencePendingIntent());
     }
 
     private class GeofenceEventProcessor {
-        private NotificationSender notificationSender;
         private Random randomizer = new Random();
-        public GeofenceEventProcessor(NotificationSender notificationSender) {
-            this.notificationSender = notificationSender;
+        public GeofenceEventProcessor() {
         }
 
         public void process(GeofencingEvent geofencingEvent) {

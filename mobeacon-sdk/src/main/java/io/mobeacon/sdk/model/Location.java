@@ -88,11 +88,12 @@ public class Location {
             GEOFENCE_EXPIRATION_IN_HOURS * 60 * 60 * 1000;
 
     public com.google.android.gms.location.Geofence getGoogleGeofenceRegion() {
-        if (coordinate != null && geofence!=null) {
+        String requestId  = getGeofenceRequestId();
+        if (coordinate != null && geofence!=null && requestId != null ) {
             return new com.google.android.gms.location.Geofence.Builder()
                     // Set the request ID of the geofence. This is a string to identify this
                     // geofence.
-                    .setRequestId(id.toString())
+                    .setRequestId(requestId)
                     .setCircularRegion(
                             this.coordinate.getLatitude(),
                             this.coordinate.getLongitude(),
@@ -104,5 +105,13 @@ public class Location {
                     .build();
         }
         else return null;
+    }
+    public String getGeofenceRequestId() {
+        if (geofence != null) {
+            if (id != null) {
+                return id.toString();
+            }
+        }
+        return null;
     }
 }

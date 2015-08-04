@@ -1,4 +1,4 @@
-package io.mobeacon.sdk;
+package io.mobeacon.sdk.geofence;
 
 import android.content.Context;
 import android.content.res.Resources;
