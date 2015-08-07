@@ -13,7 +13,8 @@ public class MobeaconSDK {
     public static final String VERSION = "1.0";
     public static final String PREFERENCES = "MOBEACON_SDK_PREFERENCES_FILE";
 
-    public static final String PREF_KEY_SDK_INSTALL_DT = "sdkInstallDateTime";
+    public static final String PREF_KEY_SDK_INSTALL_DT = "sdk.install.datetime";
+    public static final String PREF_KEY_APP_KEY = "app.key";
 
     private static MobeaconSDK instance;
 

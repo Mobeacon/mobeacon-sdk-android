@@ -3,6 +3,7 @@ package io.mobeacon.sdk.services;
 import android.app.Service;
 import android.content.Intent;
 import android.content.Context;
+import android.content.SharedPreferences;
 import android.os.*;
 import android.util.Log;
 
@@ -14,6 +15,7 @@ import org.altbeacon.beacon.BeaconParser;
 import org.altbeacon.beacon.MonitorNotifier;
 import org.altbeacon.beacon.Region;
 
+import io.mobeacon.sdk.MobeaconSDK;
 import io.mobeacon.sdk.NotificationCenter;
 import io.mobeacon.sdk.geofence.GeofenceMonitor;
 import io.mobeacon.sdk.nearby.NearbyLocationsLoader;
@@ -22,6 +24,7 @@ import io.mobeacon.sdk.model.SDKContext;
 import io.mobeacon.sdk.model.SDKContextFactory;
 import io.mobeacon.sdk.rest.MobeaconRestApi;
 import io.mobeacon.sdk.rest.MobeaconRestApiFactory;
+import io.mobeacon.sdk.util.DateTimeUtils;
 import io.mobeacon.sdk.util.LocationUtils;
 import rx.functions.Action1;
 
@@ -53,6 +56,7 @@ public class MobeaconService extends Service implements BeaconConsumer {
         context.startService(intent);
     }
     private MobeaconServiceHandler mServiceHandler;
+    private Looper mMainThreadLooper;
 
     public MobeaconService() {
         super();
@@ -77,6 +81,8 @@ public class MobeaconService extends Service implements BeaconConsumer {
         private NearbyLocationsLoader mLocationsLoader;
         private BeaconManager mBeaconManager;
         private NotificationCenter mNotificationCenter;
+        private GeofenceMonitor mGeofenceMonitor;
+        private boolean mStarted = false;
 
         public MobeaconServiceHandler(Looper looper) {
             super(looper);
@@ -88,23 +94,23 @@ public class MobeaconService extends Service implements BeaconConsumer {
             Bundle data;
             switch (msg.what) {
                 case MSG_CODE_START_SDK:
+                    mStarted = true;
                     data = msg.getData();
                     if (data!=null) {
                         startSdkConfigurationForApp(data.getString(MSG_DATA_APP_KEY));
                     }
                 case MSG_CODE_GEOFENCE_TRANSITION_EVENT:
-                    if(mNotificationCenter != null) {
+                    if(mGeofenceMonitor != null) {
                         data = msg.getData();
                         if (data!=null) {
-                            Intent geofenceIntent = (Intent)data.getParcelable(MSG_DATA_GEOFENCE_INTENT);
+                            Intent geofenceIntent = (Intent) data.getParcelable(MSG_DATA_GEOFENCE_INTENT);
                             if (geofenceIntent !=null) {
-                                GeofencingEvent geofencingEvent = GeofencingEvent.fromIntent(geofenceIntent);
-                                mNotificationCenter.onGeofenceTransition(geofencingEvent);
+                                mGeofenceMonitor.processGeofenceIntent(geofenceIntent);
                             }
                         }
 
                     } else {
-                        Log.e(TAG, String.format("Failed to handle geofence intent:  mNotificationCenter=%s", mNotificationCenter));
+                        Log.e(TAG, String.format("Failed to handle geofence intent:  mGeofenceMonitor=null. Thread id %s.", Thread.currentThread().getId()));
                     }
                 default:
 
@@ -115,6 +121,10 @@ public class MobeaconService extends Service implements BeaconConsumer {
             if (mBeaconManager != null) {
                 mBeaconManager.unbind(MobeaconService.this);
             }
+        }
+
+        public boolean isStarted() {
+            return mStarted;
         }
 
         public void startMonitorBeacons() {
@@ -194,11 +204,11 @@ public class MobeaconService extends Service implements BeaconConsumer {
             if (sdkConf.isEnabled()) {
                 mLocationsLoader = new NearbyLocationsLoader(getApplicationContext(), appKey, mMobeaconRestApi);
                 mNotificationCenter = new NotificationCenter(getApplicationContext(), sdkConf);
-                mLocationsLoader.subscribe(mNotificationCenter);
 
                 if(sdkConf.isGeofenceEnabled()) {
-                    GeofenceMonitor geofenceMonitor = new GeofenceMonitor(getApplicationContext());
-                    mLocationsLoader.subscribe(geofenceMonitor);
+                    mGeofenceMonitor = new GeofenceMonitor(getApplicationContext());
+                    mLocationsLoader.subscribe(mGeofenceMonitor);
+                    mGeofenceMonitor.subscribe(mNotificationCenter);
                     Log.i(TAG, "Geofence notifications enabled.");
                 }
                 else {
@@ -228,16 +238,43 @@ public class MobeaconService extends Service implements BeaconConsumer {
             if (ACTION_START_SERVICE.equals(action)) {
                 final String appKey = intent.getStringExtra(EXTRA_APP_KEY);
                 if(appKey != null){
+                    saveAppKeyPreference(appKey);
                     mServiceHandler.sendSdkInitMsg(appKey);
                 }
             }
             else if (ACTION_GEOFENCE.equals(action)) {
                 Log.i(TAG, String.format("Handle geofence intent action %s ", action));
-                mServiceHandler.sendGeofencingEventMsg(intent);
+                if(mServiceHandler.isStarted()) {
+                    mServiceHandler.sendGeofencingEventMsg(intent);
+                }
+                else {
+                    String appKey = retrieveAppKeyPreference();
+                    if (appKey != null) {
+                        Log.w(TAG, "Service handler is not started. Skipping geofence intent and trying to restart handler.");
+                        mServiceHandler.sendSdkInitMsg(appKey);
+                    }
+                    else {
+                        Log.w(TAG, "Failed to process geofence intent: service handler is not started.");
+                    }
+                }
             }
         }
     }
-    private Looper mMainThreadLooper;
+
+    private void saveAppKeyPreference(String appKey) {
+        if (appKey != null) {
+            SharedPreferences settings = getApplicationContext().getSharedPreferences(MobeaconSDK.PREFERENCES, 0);
+            SharedPreferences.Editor editor = settings.edit();
+            editor.putString(MobeaconSDK.PREF_KEY_APP_KEY, appKey);
+            // Commit the edits!
+            editor.commit();
+        }
+    }
+
+    private String retrieveAppKeyPreference() {
+        SharedPreferences settings = getApplicationContext().getSharedPreferences(MobeaconSDK.PREFERENCES, 0);
+        return settings.getString(MobeaconSDK.PREF_KEY_APP_KEY, null);
+    }
     @Override
     public void onCreate() {
         super.onCreate();

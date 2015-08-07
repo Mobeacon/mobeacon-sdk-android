@@ -5,11 +5,6 @@ import android.location.Location;
 import android.os.Bundle;
 import android.util.Log;
 
-import com.google.android.gms.common.ConnectionResult;
-import com.google.android.gms.common.api.GoogleApiClient;
-import com.google.android.gms.common.api.GoogleApiClient.ConnectionCallbacks;
-import com.google.android.gms.common.api.GoogleApiClient.OnConnectionFailedListener;
-import com.google.android.gms.location.GeofencingEvent;
 import com.google.android.gms.location.LocationListener;
 import com.google.android.gms.location.LocationRequest;
 import com.google.android.gms.location.LocationServices;
@@ -18,20 +13,17 @@ import java.util.ArrayList;
 import java.util.List;
 
 import io.mobeacon.sdk.AbstractGoogleLocationServicesClient;
-import io.mobeacon.sdk.geofence.GeofenceMonitor;
-import io.mobeacon.sdk.NotificationSender;
 import io.mobeacon.sdk.geofence.IGeofenceTransitionListener;
 import io.mobeacon.sdk.rest.MobeaconRestApi;
-import io.mobeacon.sdk.services.MobeaconService;
 import rx.functions.Action1;
 
 /**
  * Created by maxulan on 22.07.15.
  */
 public class NearbyLocationsLoader extends AbstractGoogleLocationServicesClient implements LocationListener, INearbyLocationsPublisher, IGeofenceTransitionListener {
-    private static final String TAG = "MobeaconLocationMgr";
-    private static final int DEFAULT_RADIUS = 5000;
-    private static final int DEFAULT_LIMIT = 10;
+    private static final String TAG = "NearbyLocationsLoader";
+    public static final float MAX_RADIUS = 5000f;//in meters
+    public static final int NUMBER_OF_MONITORED_LOCATIONS_NEARBY = 10;
 
     private LocationRequest mLocationRequest;
     private MobeaconRestApi mobeaconRestApi;
@@ -54,14 +46,6 @@ public class NearbyLocationsLoader extends AbstractGoogleLocationServicesClient 
 
     @Override
     public void onConnected(Bundle connectionHint) {
-        Location mLastLocation = LocationServices.FusedLocationApi.getLastLocation(
-                mGoogleApiClient);
-        if (mLastLocation != null) {
-            Log.i(TAG, String.format("Current location. Latitude=%f Longitude=%f", mLastLocation.getLatitude(), mLastLocation.getLongitude()));
-        }
-        else  {
-            Log.e(TAG, "Connected but failed to receive last location");
-        }
         startLocationUpdates();
     }
 
@@ -71,6 +55,7 @@ public class NearbyLocationsLoader extends AbstractGoogleLocationServicesClient 
     private void startLocationUpdates() {
         // The final argument to {@code requestLocationUpdates()} is a LocationListener
         // (http://developer.android.com/reference/com/google/android/gms/location/LocationListener.html).
+        Log.i(TAG, "Starting location updates");
         LocationServices.FusedLocationApi.requestLocationUpdates(
                 mGoogleApiClient, mLocationRequest, this);
     }
@@ -81,24 +66,25 @@ public class NearbyLocationsLoader extends AbstractGoogleLocationServicesClient 
     private void stopLocationUpdates() {
         // The final argument to {@code requestLocationUpdates()} is a LocationListener
         // (http://developer.android.com/reference/com/google/android/gms/location/LocationListener.html).
+        Log.i(TAG, "Stopping location updates");
         LocationServices.FusedLocationApi.removeLocationUpdates(mGoogleApiClient, this);
     }
-    private void notifyAboutNewLocations(List<io.mobeacon.sdk.model.Location> locations) {
+    private void notifyAboutNewLocations(double latitude, double longitude, List<io.mobeacon.sdk.model.Location> locations) {
         if (nearbyLocationsListeners != null && locations != null) {
             for (INearbyLocationsListener listener : nearbyLocationsListeners) {
-               listener.onNearbyLocationsChange(locations);
+               listener.onNearbyLocationsChange(latitude, longitude, locations);
             }
         }
     }
-    public void onLocationChanged(Location loc) {
+    public void onLocationChanged(final Location loc) {
         if (loc != null) {
             Log.i(TAG, String.format("location update: Latitude=%f Longitude=%f", loc.getLatitude(), loc.getLongitude()));
-            mobeaconRestApi.getNearestLocations(appKey, loc.getLatitude(), loc.getLongitude(), DEFAULT_RADIUS, DEFAULT_LIMIT).subscribe(new Action1<List<io.mobeacon.sdk.model.Location>>() {
+            mobeaconRestApi.getNearestLocations(appKey, loc.getLatitude(), loc.getLongitude(), MAX_RADIUS, NUMBER_OF_MONITORED_LOCATIONS_NEARBY).subscribe(new Action1<List<io.mobeacon.sdk.model.Location>>() {
                 @Override
-                public void call(List<io.mobeacon.sdk.model.Location> locations) {
-                    if (locations != null) {
-                        Log.i(TAG, String.format("Found %d locations nearby", locations.size()));
-                        notifyAboutNewLocations(locations);
+                public void call(List<io.mobeacon.sdk.model.Location> nearbyLocations) {
+                    if (nearbyLocations != null) {
+                        Log.i(TAG, String.format("Found %d locations nearby", nearbyLocations.size()));
+                        notifyAboutNewLocations(loc.getLatitude(), loc.getLongitude(), nearbyLocations);
                         //from here we use Geofence instad of GPS to save energy
                         stopLocationUpdates();
                     }
@@ -106,7 +92,7 @@ public class NearbyLocationsLoader extends AbstractGoogleLocationServicesClient 
             }, new Action1<Throwable>() {
                 @Override
                 public void call(Throwable throwable) {
-                    Log.i(TAG, String.format("Failed to find locations nearby: %s", throwable.getLocalizedMessage()));
+                    Log.e(TAG, String.format("Failed to find locations nearby: %s", throwable.getLocalizedMessage()), throwable);
                 }
             });
         }
@@ -125,7 +111,17 @@ public class NearbyLocationsLoader extends AbstractGoogleLocationServicesClient 
     }
 
     @Override
-    public void onGeofenceTransition(GeofencingEvent event) {
-        //TODO on "reload radius" geofence exit - reload locations
+    public void onLeavingMonitoredRegion() {
+        startLocationUpdates();
+    }
+
+    @Override
+    public void onEnterGeofence(io.mobeacon.sdk.model.Location location) {
+        //do nothing
+    }
+
+    @Override
+    public void onExitGeofence(io.mobeacon.sdk.model.Location location) {
+        //do nothing
     }
 }

@@ -61,7 +61,7 @@ public class MobeaconRestApiFactory {
         }
 
         @Override
-        public Observable<List<Location>> getNearestLocations(String appKey, double latitude, double longitude, int radius, int limit) {
+        public Observable<List<Location>> getNearestLocations(String appKey, double latitude, double longitude, float radius, int limit) {
             return wrap(api.getNearestLocations(appKey, latitude, longitude, radius, limit));
         }
 
