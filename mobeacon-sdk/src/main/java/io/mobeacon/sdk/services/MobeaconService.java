@@ -17,6 +17,7 @@ import org.altbeacon.beacon.Region;
 
 import io.mobeacon.sdk.MobeaconSDK;
 import io.mobeacon.sdk.NotificationCenter;
+import io.mobeacon.sdk.beacon.BeaconMonitor;
 import io.mobeacon.sdk.geofence.GeofenceMonitor;
 import io.mobeacon.sdk.nearby.NearbyLocationsLoader;
 import io.mobeacon.sdk.model.SDKConf;
@@ -80,6 +81,7 @@ public class MobeaconService extends Service implements BeaconConsumer {
         private MobeaconRestApi mMobeaconRestApi;
         private NearbyLocationsLoader mLocationsLoader;
         private BeaconManager mBeaconManager;
+        private BeaconMonitor mBeaconMonitor;
         private NotificationCenter mNotificationCenter;
         private GeofenceMonitor mGeofenceMonitor;
         private boolean mStarted = false;
@@ -128,30 +130,8 @@ public class MobeaconService extends Service implements BeaconConsumer {
         }
 
         public void startMonitorBeacons() {
-            if (mBeaconManager != null) {
-                mBeaconManager.setMonitorNotifier(new MonitorNotifier() {
-                    @Override
-                    public void didEnterRegion(Region region) {
-                        region.getUniqueId();
-                        Log.i(TAG, "I just saw an beacon for the first time!");
-                    }
-
-                    @Override
-                    public void didExitRegion(Region region) {
-                        Log.i(TAG, "I no longer see an beacon");
-                    }
-
-                    @Override
-                    public void didDetermineStateForRegion(int state, Region region) {
-                        Log.i(TAG, "I have just switched from seeing/not seeing beacons: " + state);
-                    }
-                });
-
-                try {
-                    mBeaconManager.startMonitoringBeaconsInRegion(new Region("myMonitoringUniqueId", null, null, null));
-                    Log.i(TAG, "Beacons monitoring is started");
-
-                } catch (RemoteException e) {    }
+            if (mBeaconManager != null && mBeaconMonitor != null) {
+                mBeaconManager.setMonitorNotifier(mBeaconMonitor);
             }
         }
 
@@ -200,7 +180,6 @@ public class MobeaconService extends Service implements BeaconConsumer {
 
         protected synchronized void configureSDK(String appKey, SDKConf sdkConf) {
             Log.i(TAG, String.format("SDK initialization completed. Config: isEnabled=%s. Thread id %s ", sdkConf.isEnabled(), Thread.currentThread().getId()));
-
             if (sdkConf.isEnabled()) {
                 mLocationsLoader = new NearbyLocationsLoader(getApplicationContext(), appKey, mMobeaconRestApi);
                 mNotificationCenter = new NotificationCenter(getApplicationContext(), sdkConf);
@@ -210,19 +189,23 @@ public class MobeaconService extends Service implements BeaconConsumer {
                     mLocationsLoader.subscribe(mGeofenceMonitor);
                     mGeofenceMonitor.subscribe(mNotificationCenter);
                     Log.i(TAG, "Geofence notifications enabled.");
+                    if (sdkConf.isBeaconsEnabled()) {
+                        mBeaconManager = BeaconManager.getInstanceForApplication(getApplicationContext());
+                        //set layput for estimote/aprilBrothers
+                        mBeaconManager.getBeaconParsers().add(new BeaconParser().setBeaconLayout("m:2-3=0215,i:4-19,i:20-21,i:22-23,p:24-24"));
+                        mBeaconManager.bind(MobeaconService.this);
+                        mBeaconMonitor = new BeaconMonitor(sdkConf, mBeaconManager);
+                        mBeaconMonitor.subscribe(mNotificationCenter);
+                        mGeofenceMonitor.subscribe(mBeaconMonitor);
+                    }
+                    else {
+                        Log.i(TAG, "Beacons disabled according to configuration.");
+                    }
                 }
                 else {
-                    Log.i(TAG, "Geofence disabled according to configuration.");
+                    Log.i(TAG, "Geofence and beacons monitoring disabled according to configuration.");
                 }
-                if (sdkConf.isBeaconsEnabled()) {
-                    mBeaconManager = BeaconManager.getInstanceForApplication(getApplicationContext());
-                    //set layput for estimote/aprilBrothers
-                    mBeaconManager.getBeaconParsers().add(new BeaconParser().setBeaconLayout("m:2-3=0215,i:4-19,i:20-21,i:22-23,p:24-24"));
-                    mBeaconManager.bind(MobeaconService.this);
-                }
-                else {
-                    Log.i(TAG, "Beacons disabled according to configuration.");
-                }
+
             }
             else {
                 Log.i(TAG, "SDK disabled according to configuration.");

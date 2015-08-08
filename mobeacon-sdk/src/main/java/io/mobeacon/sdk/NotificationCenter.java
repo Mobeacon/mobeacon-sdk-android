@@ -4,14 +4,16 @@ import android.app.NotificationManager;
 import android.content.Context;
 import android.util.Log;
 
+import io.mobeacon.sdk.beacon.IBeaconEventListener;
 import io.mobeacon.sdk.geofence.IGeofenceTransitionListener;
+import io.mobeacon.sdk.model.Beacon;
 import io.mobeacon.sdk.model.Location;
 import io.mobeacon.sdk.model.SDKConf;
 
 /**
  * Created by maxulan on 04.08.15.
  */
-public class NotificationCenter implements IGeofenceTransitionListener{
+public class NotificationCenter implements IGeofenceTransitionListener, IBeaconEventListener{
     public static final String TAG = "NotificationCenter";
 
     private NotificationSender mNotificationSender;
@@ -56,4 +58,23 @@ public class NotificationCenter implements IGeofenceTransitionListener{
     public void onLeavingMonitoredRegion() {
     }
 
+    @Override
+    public void onEnterBeaconArea(Location location, Beacon beacon) {
+        if (beacon!= null && beacon.getNotification() != null) {
+            io.mobeacon.sdk.model.Notification notification = beacon.getNotification();
+            Log.i(TAG, String.format("Beacon enter event happend. Sending notification: title='%s', text='%s'", notification.getTitle(), notification.getText()));
+            // Send notification and log the transition details.
+            mNotificationSender.sendNotification(notification);
+        }
+    }
+
+    @Override
+    public void onExitBeaconArea(Location location, Beacon beacon) {
+        if (beacon!= null && beacon.getNotification() != null) {
+            io.mobeacon.sdk.model.Notification notification = beacon.getNotification();
+            Log.i(TAG, String.format("Beacon exit event happend. Sending notification: title='%s', text='%s'", notification.getTitle(), notification.getText()));
+            // Send notification and log the transition details.
+            mNotificationSender.sendNotification(notification);
+        }
+    }
 }
