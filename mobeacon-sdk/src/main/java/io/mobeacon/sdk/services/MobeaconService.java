@@ -172,7 +172,7 @@ public class MobeaconService extends Service implements BeaconConsumer {
             }, new Action1<Throwable>() {
                 @Override
                 public void call(Throwable e) {
-                    Log.e(TAG, String.format("Failed to get SDK configuration for App by key %s. Thread id %s ", appKey, e.getLocalizedMessage(), Thread.currentThread().getId()));
+                    Log.e(TAG, String.format("Failed to get SDK configuration for App by key %s: %s. Thread id %s ", appKey, e.getLocalizedMessage(), Thread.currentThread().getId()));
                 }
             });
 
@@ -219,6 +219,7 @@ public class MobeaconService extends Service implements BeaconConsumer {
             Log.i(TAG, String.format("Handle intent action %s ", action));
 
             if (ACTION_START_SERVICE.equals(action)) {
+                Log.i(TAG, "Handling mobeacon service start intent.");
                 final String appKey = intent.getStringExtra(EXTRA_APP_KEY);
                 if(appKey != null){
                     saveAppKeyPreference(appKey);
@@ -226,7 +227,7 @@ public class MobeaconService extends Service implements BeaconConsumer {
                 }
             }
             else if (ACTION_GEOFENCE.equals(action)) {
-                Log.i(TAG, String.format("Handle geofence intent action %s ", action));
+                Log.i(TAG, String.format("Handling geofence intent action %s ", action));
                 if(mServiceHandler.isStarted()) {
                     mServiceHandler.sendGeofencingEventMsg(intent);
                 }
@@ -274,6 +275,8 @@ public class MobeaconService extends Service implements BeaconConsumer {
     }
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
+        Log.i(TAG, " === starting service  ===");
+
         onHandleIntent(intent);
         return super.onStartCommand(intent, flags, startId);
     }
