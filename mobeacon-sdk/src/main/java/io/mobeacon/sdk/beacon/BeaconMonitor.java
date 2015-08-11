@@ -42,16 +42,23 @@ public class BeaconMonitor implements IGeofenceTransitionListener, MonitorNotifi
 
     @Override
     public void didEnterRegion(Region region) {
-        Log.i(TAG, "Enter beacon region event happened.");
+        Log.i(TAG, String.format("Enter beacon region %s event happened.", region));
         Pair<Location, Beacon> beaconLocation =  mBeaconsLocations.get(region);
-        notifyListeners(EventType.ENTER, beaconLocation.first, beaconLocation.second);
+        if (beaconLocation != null) {
+            notifyListeners(EventType.ENTER, beaconLocation.first, beaconLocation.second);
+        }
+        else {
+            Log.i(TAG, String.format("No known Beacon/Location found for beacon region %s.", region));
+        }
     }
 
     @Override
     public void didExitRegion(Region region) {
         Log.i(TAG, "Exit beacon region event happened.");
         Pair<Location, Beacon> beaconLocation =  mBeaconsLocations.get(region);
-        notifyListeners(EventType.EXIT, beaconLocation.first, beaconLocation.second);
+        if (beaconLocation != null) {
+            notifyListeners(EventType.EXIT, beaconLocation.first, beaconLocation.second);
+        }
     }
 
     @Override
@@ -75,27 +82,40 @@ public class BeaconMonitor implements IGeofenceTransitionListener, MonitorNotifi
             for(Beacon beacon : location.getBeacons()) {
                 try {
                     Region region = getBeaconRegion(beacon);
+                    Log.i(TAG, String.format("Registering beacon region %s to monitor.", region));
                     mBeaconsLocations.put(region, Pair.create(location, beacon));
                     mBeaconManager.startMonitoringBeaconsInRegion(region);
                 }
                 catch (RemoteException re) {
                 }
             }
+            //TODO remove after debugging
+            try {
+                Log.i(TAG, "Registering 'all-matching' beacon region to monitor.");
+                mBeaconManager.startMonitoringBeaconsInRegion(new Region("mobeacon-all-matching-test", null, null, null));
+            }
+            catch (RemoteException re) {
+            }
+        }
+        else {
+            Log.i(TAG, "No beacons for geofence.");
         }
     }
 
     @Override
     public void onExitGeofence(Location location) {
         if (location!= null && location.getBeacons() != null && location.getBeacons().size() > 0) {
-            for(Beacon beacon : location.getBeacons()) {
-                try {
-                    Region region = getBeaconRegion(beacon);
-                    mBeaconsLocations.remove(region);
-                    mBeaconManager.stopMonitoringBeaconsInRegion(getBeaconRegion(beacon));
-                }
-                catch (RemoteException re) {
-                }
-            }
+            Log.i(TAG, "Unregistering monitored beacons.");
+
+//            for(Beacon beacon : location.getBeacons()) {
+//                try {
+//                    Region region = getBeaconRegion(beacon);
+//                    mBeaconsLocations.remove(region);
+//                    mBeaconManager.stopMonitoringBeaconsInRegion(getBeaconRegion(beacon));
+//                }
+//                catch (RemoteException re) {
+//                }
+//            }
         }
     }
 
